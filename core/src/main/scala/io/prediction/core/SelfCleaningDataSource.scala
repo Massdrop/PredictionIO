@@ -218,18 +218,18 @@ trait SelfCleaningDataSource {
   @DeveloperApi
   def cleanPEvents(sc: SparkContext): RDD[Event] = {
    val pEvents = PEventStore.find(appName)(sc).sortBy(_.eventTime, false)
+   val pRecentEvents = getCleanedPEvents(pEvents)
 
-   val rdd = eventWindow match {
+   eventWindow match {
       case Some(ew) =>
         var updated =
-          if (ew.compressProperties) compressPProperties(sc, pEvents) else pEvents
+          if (ew.compressProperties) compressPProperties(sc, pRecentEvents) else pRecentEvents
 
-        val deduped = if (ew.removeDuplicates) removePDuplicates(sc,updated) else updated
+        val deduped = if (ew.removeDuplicates) removePDuplicates(sc, updated) else updated
         deduped
       case None =>
-        pEvents
+        pRecentEvents
     }
-  getCleanedPEvents(rdd)
   }
 
   /** :: DeveloperApi ::
@@ -263,17 +263,17 @@ trait SelfCleaningDataSource {
   @DeveloperApi
   def cleanLEvents(): Iterable[Event] = {
     val lEvents = LEventStore.find(appName).toList.sortBy(_.eventTime).reverse
+    val lRecentEvents = getCleanedLEvents(lEvents)
 
-    val events = eventWindow match {
+    eventWindow match {
       case Some(ew) =>
         var updated =
-          if (ew.compressProperties) compressLProperties(lEvents) else lEvents
+          if (ew.compressProperties) compressLProperties(lRecentEvents) else lRecentEvents
           val deduped = if (ew.removeDuplicates) removeLDuplicates(updated) else updated
         deduped
       case None =>
-        lEvents
+        lRecentEvents
     }
-    getCleanedLEvents(events)
   }
 
 
