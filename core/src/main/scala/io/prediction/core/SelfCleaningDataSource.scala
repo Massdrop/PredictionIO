@@ -56,7 +56,7 @@ trait SelfCleaningDataSource {
     * @return RDD[Event] most recent PEvents.
     */
   @DeveloperApi
-  def getCleanedPEvents(pEvents: RDD[Event]): RDD[Event] = { 
+  def getCleanedPEvents(pEvents: RDD[Event]): RDD[Event] = {
 
     eventWindow
       .flatMap(_.duration)
@@ -75,7 +75,7 @@ trait SelfCleaningDataSource {
     * @return Iterator[Event] most recent LEvents.
     */
   @DeveloperApi
-  def getCleanedLEvents(lEvents: Iterable[Event]): Iterable[Event] = { 
+  def getCleanedLEvents(lEvents: Iterable[Event]): Iterable[Event] = {
 
     eventWindow
       .flatMap(_.duration)
@@ -93,7 +93,7 @@ trait SelfCleaningDataSource {
       .flatMap { pair =>
         val (_, ls) = pair
         ls.groupBy(_.entityId).map { anotherpair =>
-          val (_, anotherls) = anotherpair 
+          val (_, anotherls) = anotherpair
           compress(anotherls)
         }
       } ++ rdd.filter(!isSetEvent(_))
@@ -108,9 +108,9 @@ trait SelfCleaningDataSource {
       } ++ events.filter(!isSetEvent(_))
   }
 
-  def removePDuplicates(sc: SparkContext, rdd: RDD[Event]): RDD[Event] = { 
+  def removePDuplicates(sc: SparkContext, rdd: RDD[Event]): RDD[Event] = {
     val now = DateTime.now()
-    rdd.map(x => 
+    rdd.map(x =>
       (recreateEvent(x, None, now), (x.eventId, x.eventTime)))
       .groupByKey
       .map{case (x, y) => recreateEvent(x, y.head._1, y.head._2)}
@@ -118,18 +118,18 @@ trait SelfCleaningDataSource {
   }
 
   def recreateEvent(x: Event, eventId: Option[String], creationTime: DateTime): Event = {
-    Event(eventId = eventId, event = x.event, entityType = x.entityType, 
-          entityId = x.entityId, targetEntityType = x.targetEntityType, 
-          targetEntityId = x.targetEntityId, properties = x.properties, 
-          eventTime = creationTime, tags = x.tags, prId= x.prId, 
-          creationTime = creationTime)  
+    Event(eventId = eventId, event = x.event, entityType = x.entityType,
+          entityId = x.entityId, targetEntityType = x.targetEntityType,
+          targetEntityId = x.targetEntityId, properties = x.properties,
+          eventTime = creationTime, tags = x.tags, prId= x.prId,
+          creationTime = creationTime)
   }
 
   def removeLDuplicates(ls: Iterable[Event]): Iterable[Event] = {
     val now = DateTime.now()
-    ls.toList.map(x => 
+    ls.toList.map(x =>
       (recreateEvent(x, None, now), (x.eventId, x.eventTime)))
-      .groupBy(_._1).mapValues( _.map( _._2 ) ) 
+      .groupBy(_._1).mapValues( _.map( _._2 ) )
       .map(x => recreateEvent(x._1, x._2.head._1, x._2.head._2))
 
   }
@@ -143,7 +143,7 @@ trait SelfCleaningDataSource {
   @DeveloperApi
   def cleanPersistedPEvents(sc: SparkContext): Unit ={
      eventWindow match {
-      case Some(ew) => 
+      case Some(ew) =>
         val result = cleanPEvents(sc)
         val originalEvents = PEventStore.find(appName)(sc)
         val newEvents = result subtract originalEvents
@@ -155,7 +155,7 @@ trait SelfCleaningDataSource {
        case None =>
     }
   }
-  
+
    /**
     * Replace events in Event Store
     *
@@ -167,9 +167,9 @@ trait SelfCleaningDataSource {
     sc: SparkContext
   ): Unit = {
     val (appId, channelId) = Common.appNameToId(appName, None)
-  
+
     pEventsDb.write(newEvents, appId)(sc)
-  
+
     removePEvents(eventsToRemove, appId, sc)
   }
 
@@ -182,7 +182,7 @@ trait SelfCleaningDataSource {
     Await.result(futureOfList, scala.concurrent.duration.Duration(60, "minutes"))
   }
 
-  def removePEvents(eventsToRemove: RDD[String], appId: Int, sc: SparkContext) { 
+  def removePEvents(eventsToRemove: RDD[String], appId: Int, sc: SparkContext) {
     pEventsDb.delete(eventsToRemove.filter(x =>  x != ""), appId, None)(sc)
   }
 
@@ -197,15 +197,15 @@ trait SelfCleaningDataSource {
   def wipe(
     newEvents: Set[Event],
     eventsToRemove: Set[String]
-  ): Unit = { 
+  ): Unit = {
     val (appId, channelId) = Common.appNameToId(appName, None)
-   
+
     val listOfFutureNewEvents: List[Future[String]] = newEvents.toList.map { case event =>
         lEventsDb.futureInsert(recreateEvent(event, None, event.eventTime), appId)
-    } 
+    }
 
     val futureOfListNewEvents: Future[List[String]] = Future.sequence(listOfFutureNewEvents)
-    Await.result(futureOfListNewEvents, scala.concurrent.duration.Duration(60, "minutes")) 
+    Await.result(futureOfListNewEvents, scala.concurrent.duration.Duration(60, "minutes"))
 
     removeEvents(eventsToRemove, appId)
   }
@@ -217,13 +217,13 @@ trait SelfCleaningDataSource {
     */
   @DeveloperApi
   def cleanPEvents(sc: SparkContext): RDD[Event] = {
-   val pEvents = PEventStore.find(appName)(sc).sortBy(_.eventTime)
+   val pEvents = PEventStore.find(appName)(sc).sortBy(_.eventTime, false)
 
    val rdd = eventWindow match {
       case Some(ew) =>
         var updated =
           if (ew.compressProperties) compressPProperties(sc, pEvents) else pEvents
-        
+
         val deduped = if (ew.removeDuplicates) removePDuplicates(sc,updated) else updated
         deduped
       case None =>
@@ -251,7 +251,7 @@ trait SelfCleaningDataSource {
         }
 
         wipe(newEvents, eventsToRemove)
-  
+
        case None =>
     }
   }
@@ -262,8 +262,8 @@ trait SelfCleaningDataSource {
     */
   @DeveloperApi
   def cleanLEvents(): Iterable[Event] = {
-    val lEvents = LEventStore.find(appName).toList.sortBy(_.eventTime)
- 
+    val lEvents = LEventStore.find(appName).toList.sortBy(_.eventTime).reverse
+
     val events = eventWindow match {
       case Some(ew) =>
         var updated =
